@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMR Density Calculator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container { max-width: 960px; margin: 0 auto;  style="text-align: center;"}
+
+    h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.25rem; }
+
+    .subtitle { color: #64748b; margin-bottom: 2rem; font-size: 0.95rem; text-align: center;}
+
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 1.75rem;
+      margin-bottom: 1.5rem;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+      margin: 1.25rem 0 0.6rem;
+      grid-column: 1 / -1;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.9rem;
+    }
+
+    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+
+    .field { display: flex; flex-direction: column; gap: 0.3rem; }
+
+    label { font-size: 0.875rem; font-weight: 500; color: #374151; }
+
+    .form-input {
+      padding: 0.45rem 0.7rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+
+    .form-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px #e0e7ff; }
+
+    .error-list { list-style: none; margin-top: 0.2rem; }
+    .error-list li { font-size: 0.78rem; color: #dc2626; }
+
+    .non-field-errors {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+      color: #dc2626;
+    }
+
+    button[type="submit"] {
+      margin-top: 1.25rem;
+      width: 100%;
+      padding: 0.7rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button[type="submit"]:hover { background: #4f46e5; }
+
+    .results-grid {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .result-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+    }
+
+    .result-box h3 { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #94a3b8; margin-bottom: 0.6rem; }
+
+    .result-row {font-size: 0.9rem; margin-bottom: 0.25rem; margin: 0 auto; display: inline;}
+
+    .result-row span:first-child { color: #64748b; }
+
+    .badge-knee { border: none; }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    @media (max-width: 720px) { .charts-grid { grid-template-columns: 1fr; } }
+
+    .chart-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 0.75rem;
+      height: 280px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chart-box h4 {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 0.4rem;
+      text-align: center;
+    }
+
+    .chart-readout {
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: #5aa0d6;
+      text-align: center;
+      margin-bottom: 0.4rem;
+      min-height: 1.1em;
+    }
+
+    .chart-canvas {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .disclaimer {
+      margin-top: 0.75rem;
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 style="text-align: center;">Livestock density-AMR Trade-off Dashboard</h1>
+    <p class="subtitle">Please enter the values of your farming environment and transmission parameters of the disease.</p>
+
+    <div class="card">
+      <form method="post">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="non-field-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="grid">
+          <span class="section-label">Disease Dynamics</span>
+          {% for field in form %}
+            {% if field.name == "p" %}
+              <span class="section-label">Treatment Policy</span>
+            {% elif field.name == "IS0_relative" %}
+              <span class="section-label">Initial Conditions</span>
+            {% elif field.name == "density_min" %}
+              <span class="section-label">Density Range</span>
+            {% elif field.name == "A" %}
+              <span class="section-label">Farm &amp; Economics</span>
+            {% endif %}
+            <div class="field">
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}
+                <ul class="error-list">
+                  {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+
+        <button type="submit">Run Simulation</button>
+      </form>
+    </div>
+
+    {% if results %}
+    <div class="card">
+      <div class="results-grid">
+        <div class="result-box badge-knee" style="text-align: center; ">
+          <h3>Pareto Knee Point</h3>
+          {% if results.knee_density %}
+            <div class="result-row"><span>Optimal density: </span><span>{{ results.knee_density }} animals/m²</span></div>
+            <div class="result-row"><span>Resistant strains: </span><span>{{ results.knee_fr }}%</span></div>
+            <div class="result-row"><span>Revenue: </span><span>€{{ results.knee_revenue }}</span></div>
+          {% else %}
+            <div class="result-row"><span style="color:#94a3b8">No knee detected in Pareto front.</span></div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="charts-grid">
+        <div class="chart-box">
+          <h4>AMR vs Density</h4>
+          <div class="chart-canvas"><canvas id="amrChart"></canvas></div>
+        </div>
+        <div class="chart-box">
+          <h4>Revenue vs Density</h4>
+          <div class="chart-canvas"><canvas id="revenueChart"></canvas></div>
+        </div>
+        <div class="chart-box">
+          <h4>Pareto Front</h4>
+          <div class="chart-readout" id="paretoReadout">Hover a point for FR / Revenue</div>
+          <div class="chart-canvas"><canvas id="paretoChart"></canvas></div>
+        </div>
+        <div class="chart-box">
+          <h4 id="dynamicsTitle">Population Dynamics</h4>
+          <div class="chart-canvas"><canvas id="dynamicsChart"></canvas></div>
+        </div>
+      </div>
+      <p class="disclaimer">
+        <b>Notice:</b> This model is experimental. Results are recommendations only. Please maintain a minimum of 10% error range in the results at all times.
+        The producer takes no responsibility for losses arising from use of this tool.
+      </p>
+    </div>
+    {{ chart_data|json_script:"chart-data" }}
+    {% endif %}
+  </div>
+
+  {% if chart_data %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script>
+    const chartData = JSON.parse(document.getElementById('chart-data').textContent);
+
+    const fmt = (v) => Number(v).toFixed(2);
+
+    const gridColor = '#eef2f7';
+    const commonScales = {
+      x: { type: 'linear', grid: { color: gridColor }, ticks: { color: '#64748b' } },
+      y: { grid: { color: gridColor }, ticks: { color: '#64748b' } },
+    };
+
+    new Chart(document.getElementById('amrChart'), {
+      type: 'line',
+      data: {
+        datasets: [
+          {
+            label: 'Resistant strains (%)',
+            data: chartData.amr.sweep,
+            borderColor: '#c0392b',
+            backgroundColor: '#c0392b',
+            borderWidth: 1.8,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            tension: 0.15,
+          },
+          {
+            label: 'Current',
+            data: chartData.amr.current,
+            type: 'scatter',
+            backgroundColor: '#5aa0d6',
+            borderWidth: 0,
+            pointStyle: 'triangle',
+            pointRadius: 7,
+            pointHoverRadius: 9,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+        plugins: {
+          legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+          tooltip: {
+            callbacks: {
+              title: () => '',
+              label: (ctx) => `Density: ${fmt(ctx.parsed.x)} animals/m²  •  Resistant: ${fmt(ctx.parsed.y)}%`,
+            },
+          },
+        },
+        scales: {
+          x: { ...commonScales.x, title: { display: true, text: 'Stocking Density (animals/m²)' } },
+          y: { ...commonScales.y, title: { display: true, text: 'Resistant strains (%)' } },
+        },
+      },
+    });
+
+    new Chart(document.getElementById('revenueChart'), {
+      type: 'line',
+      data: {
+        datasets: [
+          {
+            label: 'Revenue (€)',
+            data: chartData.revenue.sweep,
+            borderColor: '#27ae60',
+            backgroundColor: '#27ae60',
+            borderWidth: 1.8,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            tension: 0.15,
+          },
+          {
+            label: 'Current',
+            data: chartData.revenue.current,
+            type: 'scatter',
+            backgroundColor: '#5aa0d6',
+            borderWidth: 0,
+            pointStyle: 'triangle',
+            pointRadius: 7,
+            pointHoverRadius: 9,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+        plugins: {
+          legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+          tooltip: {
+            callbacks: {
+              title: () => '',
+              label: (ctx) => `Density: ${fmt(ctx.parsed.x)} animals/m²  •  Revenue: €${fmt(ctx.parsed.y)}`,
+            },
+          },
+        },
+        scales: {
+          x: { ...commonScales.x, title: { display: true, text: 'Stocking Density (animals/m²)' } },
+          y: { ...commonScales.y, title: { display: true, text: 'Revenue (€)' } },
+        },
+      },
+    });
+
+    new Chart(document.getElementById('paretoChart'), {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {
+            label: 'All',
+            data: chartData.pareto.all,
+            backgroundColor: '#93c5fd',
+            borderWidth: 0,
+            pointRadius: 2.5,
+            pointHoverRadius: 6,
+            order: 1,
+          },
+          {
+            label: 'Pareto',
+            data: chartData.pareto.optimal,
+            backgroundColor: '#dc2626',
+            borderWidth: 0,
+            pointRadius: 3.5,
+            pointHoverRadius: 6,
+            order: 2,
+          },
+          {
+            label: 'Knee',
+            data: chartData.pareto.knee,
+            backgroundColor: '#16a34a',
+            borderWidth: 0,
+            pointStyle: 'triangle',
+            pointRadius: 7,
+            pointHoverRadius: 9,
+            order: 3,
+          },
+          {
+            label: 'Current',
+            data: chartData.pareto.current,
+            backgroundColor: '#5aa0d6',
+            borderWidth: 0,
+            pointStyle: 'triangle',
+            pointRadius: 7,
+            pointHoverRadius: 9,
+            order: 4,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'nearest', intersect: false },
+        onHover: (evt, elements, chart) => {
+          const readout = document.getElementById('paretoReadout');
+          if (elements.length) {
+            const pt = chart.data.datasets[elements[0].datasetIndex].data[elements[0].index];
+            readout.textContent = `FR: ${fmt(pt.x)}%  •  Revenue: €${fmt(pt.y)}`;
+          } else {
+            readout.textContent = 'Hover a point for FR / Revenue';
+          }
+        },
+        plugins: {
+          legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+          tooltip: {
+            callbacks: {
+              title: () => '',
+              label: (ctx) => `FR: ${fmt(ctx.parsed.x)}%  •  Revenue: €${fmt(ctx.parsed.y)}`,
+            },
+          },
+        },
+        scales: {
+          x: { ...commonScales.x, title: { display: true, text: 'Resistant Strains, FR (%)' } },
+          y: { ...commonScales.y, title: { display: true, text: 'Revenue (€)' } },
+        },
+      },
+    });
+
+    document.getElementById('dynamicsTitle').textContent =
+      `Population Dynamics at ${fmt(chartData.dynamics.density)} animals/m²`;
+
+    new Chart(document.getElementById('dynamicsChart'), {
+      type: 'line',
+      data: {
+        datasets: [
+          { label: 'Susceptible',           data: chartData.dynamics.S,  borderColor: '#6366f1', backgroundColor: '#6366f1', borderWidth: 1.6, pointRadius: 0, pointHoverRadius: 5 },
+          { label: 'Infected (sensitive)',  data: chartData.dynamics.IS, borderColor: '#f59e0b', backgroundColor: '#f59e0b', borderWidth: 1.6, pointRadius: 0, pointHoverRadius: 5 },
+          { label: 'Infected (resistant)',  data: chartData.dynamics.IR, borderColor: '#dc2626', backgroundColor: '#dc2626', borderWidth: 1.6, pointRadius: 0, pointHoverRadius: 5 },
+          { label: 'Recovered',             data: chartData.dynamics.R,  borderColor: '#10b981', backgroundColor: '#10b981', borderWidth: 1.6, pointRadius: 0, pointHoverRadius: 5 },
+          { label: 'Dead',                  data: chartData.dynamics.D,  borderColor: '#6b7280', backgroundColor: '#6b7280', borderWidth: 1.6, pointRadius: 0, pointHoverRadius: 5 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+        plugins: {
+          legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } },
+          tooltip: {
+            callbacks: {
+              title: (items) => `Day: ${fmt(items[0].parsed.x)}`,
+              label: (ctx) => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`,
+            },
+          },
+        },
+        scales: {
+          x: { ...commonScales.x, title: { display: true, text: 'Time (days)' } },
+          y: { ...commonScales.y, title: { display: true, text: 'Number of animals' } },
+        },
+      },
+    });
+  </script>
+  {% endif %}
+</body>
+</html>
